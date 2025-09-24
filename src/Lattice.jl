@@ -77,19 +77,21 @@ Lattice(vectors, sites) = Lattice((Tuple.(vectors)...,), (Tuple.(sites)...,))
 
 """
     lattice_vectors(lattice::AbstractLattice)
+    reciprocal_lattice_vector(lattice::AbstractLattice)
 
-Returns Bravais lattice vectors as a D-Tuple of D-Tuple, where D is the space dimension.
+Returns Bravais lattice vectors as a D-Tuple of D-Tuple, where D is the space dimension, and its reciprocal lattice vectors.
 """
 lattice_vectors(lattice::Lattice) = lattice.vectors
-reciprocal_lattice_vector(lattice::Lattice) = lattice.vectors
+reciprocal_lattice_vector(lattice::Lattice) = lattice.reciprocal_vectors
 
 """
     lattice_sites(lattice::AbstractLattice)
+    reciprocal_lattice_site(lattice::AbstractLattice)
 
-Returns sites in a Bravais lattice unit cell as a Tuple of D-Tuple, where D is the space dimension.
+Returns sites in a Bravais lattice unit cell as a Tuple of D-Tuple, where D is the space dimension, and its reciprocal lattice sites.
 """
 lattice_sites(lattice::Lattice) = lattice.sites
-reciprocal_lattice_site(lattice::Lattice) = lattice.sites
+reciprocal_lattice_site(lattice::Lattice) = lattice.reciprocal_sites
 
 
 """
@@ -136,27 +138,36 @@ struct HoneycombLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::HoneycombLattice)
+    reciprocal_lattice_vector(::HoneycombLattice)
 
 Returns the Bravais lattice vectors for a Honeycomb lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors, satisfying 𝐚ᵢ · bⱼ = 2πδᵢⱼ.
 
 The vectors are defined as:
 - 𝐚₁ = (1.0, 0.0)
 - 𝐚₂ = (0.5, 0.5√3)
+- b₁ = (2π, -2π/√3)
+- b₂ = (0.0, 4π/√3)
 """
 lattice_vectors(::HoneycombLattice) = ((1.0, 0.0), (0.5, 0.5 * sqrt(3)))
+reciprocal_lattice_vector(::HoneycombLattice) = ((2π, -2π/sqrt(3)), (0.0, 4π/sqrt(3)))
 
 """
     lattice_sites(::HoneycombLattice)
+    reciprocal_lattice_sites(::HoneycombLattice)
 
 Returns the Bravais Lattice sites for a Honeycomb lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice sites.
 
 The sites are defined as:
 - (0.0, 0.0)
 - (0.5, 0.5√3)
+its reciprocal lattice sites are defined as:
+- (0.0, 0.0)
+- (1/3, 1/√3)
 """
 lattice_sites(::HoneycombLattice) = ((0.0, 0.0), (0.5, 0.5 / sqrt(3)))
+reciprocal_lattice_sites(::HoneycombLattice) = ((0.0, 0.0), (1/3, 1/sqrt(3)))
 
 """
     struct SquareLattice <: AbstractLattice{2}
@@ -198,26 +209,34 @@ struct SquareLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::SquareLattice)
+    reciprocal_lattice_vector(::SquareLattice)
 
 Returns the Bravais lattice vectors for a Square lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors.
     
 The vectors are defined as:
 - 𝐚₁ = (1.0, 0.0)
 - 𝐚₂ = (0.0, 1.0)
+- b₁ = (2π, 0.0)
+- b₂ = (0.0, 2π)
 """
 lattice_vectors(::SquareLattice) = ((1.0, 0.0), (0.0, 1.0))
+reciprocal_lattice_vector(::SquareLattice) = ((2π, 0.0), (0.0, 2π))
 
 """
     lattice_sites(::SquareLattice)
+    reciprocal_lattice_sites(::SquareLattice)
 
 Returns the Bravais Lattice sites for a Square lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice sites.
 
 The sites are defined as:
 - (0.0, 0.0)
+its reciprocal lattice sites are defined as:
+- (0.0, 0.0)
 """
 lattice_sites(::SquareLattice) = ((0.0, 0.0),)
+reciprocal_lattice_sites(::SquareLattice) = ((0.0, 0.0),)
 
 """
     struct TriangularLattice <: AbstractLattice{2}
@@ -301,25 +320,32 @@ struct ChainLattice <: AbstractLattice{1} end
 
 """
     lattice_vectors(::ChainLattice)
+    reciprocal_lattice_vector(::ChainLattice)
 
 Returns the Bravais lattice vectors for a Chain lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors.
     
 The vectors are defined as:
 - 𝐚₁ = (1.0,)
+- b₁ = (2π,)
 """
 lattice_vectors(::ChainLattice) = ((1.0,),)
+reciprocal_lattice_vector(::ChainLattice) = ((2π,),)
 
 """
     lattice_sites(::ChainLattice)
+    reciprocal_lattice_sites(::ChainLattice)
 
 Returns the Bravais Lattice sites for a Chain lattice as a Tuple of Tuples containing
 floats.
 
 The sites are defined as:
 - (0.0,)
+its reciprocal lattice sites are defined as:
+- (0.0,)
 """
 lattice_sites(::ChainLattice) = ((0.0,),)
+reciprocal_lattice_sites(::ChainLattice) = ((0.0,),)
 
 """
     struct LiebLattice <: AbstractLattice{2}
@@ -364,18 +390,23 @@ struct LiebLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::LiebLattice)
+    reciprocal_lattice_vector(::LiebLattice)
 
 Returns the Bravais lattice vectors for a Lieb lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors.
         
 The vectors are defined as:
 - 𝐚₁ = (1.0, 0.0)
 - 𝐚₂ = (0.0, 1.0)
+- b₁ = (2π, 0.0)
+- b₂ = (0.0, 2π)
 """
 lattice_vectors(::LiebLattice) = ((1.0, 0.0), (0.0, 1.0))
+reciprocal_lattice_vector(::LiebLattice) = ((2π, 0.0), (0.0, 2π))
 
 """
     lattice_sites(::LiebLattice)
+    reciprocal_lattice_sites(::LiebLattice)
 
 Returns the Bravais Lattice sites for a Lieb lattice as a Tuple of Tuples containing
 floats.
@@ -384,6 +415,9 @@ The sites are defined as:
 - (0.0, 0.0)
 - (0.5, 0.0)
 - (0.0, 0.5)
+its reciprocal lattice sites are defined as:
+- (0.0, 0.0)
+
 """
 lattice_sites(::LiebLattice) = ((0.0, 0.0), (0.5, 0.0), (0.0, 0.5))
 
@@ -430,28 +464,38 @@ struct KagomeLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::KagomeLattice)
+    reciprocal_lattice_vector(::KagomeLattice)
 
 Returns the Bravais lattice vectors for a Kagome lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors.
         
 The vectors are defined as:
 - 𝐚₁ = (1.0, 0.0)
 - 𝐚₂ = (0.5, 0.5√3)
+- b₁ = (2π, -2π/√3)
+- b₂ = (0.0, 4π/√3)
 """
 lattice_vectors(::KagomeLattice) = ((1.0, 0.0), (0.5, 0.5 * sqrt(3)))
+reciprocal_lattice_vector(::KagomeLattice) = ((2π, -2π/√3), (0.0, 4π/√3))
 
 """
     lattice_sites(::KagomeLattice)
+    reciprocal_lattice_sites(::KagomeLattice)
 
-Returns the Bravais Lattice sites for a Lieb lattice as a Tuple of Tuples containing
+Returns the Bravais Lattice sites for a Kagome lattice as a Tuple of Tuples containing
 floats.
 
 The sites are defined as:
 - (0.0, 0.0)
 - (0.25, 0.25√3)
 - (0.75, 0.25√3)
+its reciprocal lattice sites are defined as:
+- (0.0, 0.0)
+- (1/3, 1/√3)
+- (2/3, 1/√3)
 """
 lattice_sites(::KagomeLattice) = ((0.0, 0.0), (0.25, 0.25 * sqrt(3)), (0.75, 0.25 * sqrt(3)))
+reciprocal_lattice_sites(::KagomeLattice) = ((0.0, 0.0), (1/3, 1/sqrt(3)), (2/3, 1/sqrt(3)))
 
 """
     struct RectangularLattice <: AbstractLattice{2}
@@ -484,26 +528,34 @@ end
 
 """
     lattice_vectors(r::RectangularLattice)
+    reciprocal_lattice_vector(r::RectangularLattice)
 
 Returns the Bravais lattice vectors for a Rectangular lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice vectors.
         
 The vectors are defined as:
 - 𝐚₁ = (1.0, 0.0)
 - 𝐚₂ = (0.0, `r.aspect_ratio`), where `aspect_ratio` is a `Float64`.
+- b₁ = (2π, 0.0)
+- b₂ = (0.0, 2π/`r.aspect_ratio`)
 """
 lattice_vectors(r::RectangularLattice) = ((1.0, 0.0), (0.0, r.aspect_ratio))
+reciprocal_lattice_vector(r::RectangularLattice) = ((2π, 0.0), (0.0, 2π / r.aspect_ratio))
 
 """
     lattice_sites(::RectangularLattice)
+    reciprocal_lattice_sites(::RectangularLattice)
 
 Returns the Bravais Lattice sites for a Rectangular lattice as a Tuple of Tuples containing
-floats.
+floats, and its reciprocal lattice sites.
 
 The sites are defined as:
 - (0.0, 0.0)
+its reciprocal lattice sites are defined as:
+- (0.0, 0.0)
 """
 lattice_sites(::RectangularLattice) = ((0.0, 0.0),)
+reciprocal_lattice_sites(::RectangularLattice) = ((0.0, 0.0),)
 
 """
     generate_sites(lattice::AbstractLattice{D}, repeats::Vararg{Int,D}; scale=1.0)
@@ -530,7 +582,7 @@ julia> sites = [(1.0, 2.0), (10.0, 3.0), (1.0, 12.0), (3.0, 5.0)]
  (1.0, 12.0)
  (3.0, 5.0)
 
-julia> RydbergToolkit.offset_axes(sites, 1.0, 3.0)
+julia> LatticeQSL.offset_axes(sites, 1.0, 3.0)
 4-element Vector{Tuple{Float64, Float64}}:
  (2.0, 5.0)
  (11.0, 6.0)
@@ -556,7 +608,7 @@ julia> sites = [(1.0, 2.0), (10.0, 3.0), (1.0, 12.0), (3.0, 5.0)]
  (1.0, 12.0)
  (3.0, 5.0)
 
-julia> RydbergToolkit.rescale_axes(sites, 2.0)
+julia> LatticeQSL.rescale_axes(sites, 2.0)
 4-element Vector{Tuple{Float64, Float64}}:
  (2.0, 4.0)
  (20.0, 6.0)
@@ -573,10 +625,13 @@ end
 
 Randomly drop out `ratio * number of sites` atoms from `sites`, where `ratio` ∈ [0, 1].
 """
-function random_dropout(sites, ratio::Real)
-    (ratio >= 0 && ratio <= 1) || throw(ArgumentError("dropout ratio be in range [0, 1], got `$ratio`."))
-    atoms = YaoArrayRegister.sample(1:length(sites), round(Int, length(sites) * (1 - ratio)); replace = false)
-    return sites[sort!(atoms)]
+function random_dropout(sites::AbstractVector, ratio::Real)
+    0 ≤ ratio ≤ 1 || throw(ArgumentError("ratio must be ∈ [0, 1], got $ratio"))
+    k = floor(Int, length(sites) * (1 - ratio))
+    k < 1 && return empty(sites)          # delete all
+    k ≥ length(sites) && return copy(sites)  # keep all
+    ind = randperm(length(sites))[1:k]  # first k unique random indices
+    sites[sort!(ind)]                   # keep original order
 end
 
 """
@@ -592,7 +647,7 @@ julia> sites = [(1.0, 2.0), (10.0, 3.0), (1.0, 12.0), (3.0, 5.0)]
  (1.0, 12.0)
  (3.0, 5.0)
 
-julia> RydbergToolkit.clip_axes(sites, (-5.0, 5.0), (-5.0, 5.0))
+julia> LatticeQSL.clip_axes(sites, (-5.0, 5.0), (-5.0, 5.0))
 2-element Vector{Tuple{Float64, Float64}}:
  (1.0, 2.0)
  (3.0, 5.0)
@@ -601,4 +656,92 @@ julia> RydbergToolkit.clip_axes(sites, (-5.0, 5.0), (-5.0, 5.0))
 function clip_axes(sites, bound0::Tuple{T,T}, bounds::Vararg{Tuple{T,T},D}) where {D,T}
     @assert all(x -> length(x) == D + 1, sites) "expected $(D + 1)-tuple sites, got $(length.(sites))"
     return filter(x -> bound0[1] <= x[1] <= bound0[2] && all(i -> bounds[i][1] <= x[i+1] <= bounds[i][2], 1:D), sites)
+end
+
+############ manipulate grid ###############
+"""
+    MaskedGrid{T}
+    MaskedGrid(xs, ys, mask)
+
+Masked square lattice contains 3 fields, the x-coordinates, y-coordinates and a mask, returning true if the site exists, false otherwise. To index the given lattice in the square grid.
+e.g. `MaskedGrid([0.0, 1.0, 3.0], [0.0, 2.0,6.0], Bool[1 0 0; 0 1 1; 0 1 0])` specifies the following lattice:
+
+         y₁   y₂        y₃
+         ↓    ↓         ↓
+    x₁ → ●    ⋅         ●
+    x₂ → ⋅    ●         ●
+
+    x₃ → ⋅    ●         ⋅
+"""
+struct MaskedGrid{T}
+    xs::Vector{T}
+    ys::Vector{T}
+    mask::Matrix{Bool}
+end
+
+
+"""
+    make_grid(sites; atol=...)
+
+Create a [`MaskedGrid`](@ref) from the sites. It is required by lattice preparation of Rydberg array.
+Because the grid will sort the sites by rows, we need `atol` (default value is 10 time sit data precision)
+determines up to what level of round off error, two atoms belong to the same row.
+
+```jldoctest
+julia> sites = HoneycombLattice() |> generate_sites(_, 2, 3)
+12-element Vector{Tuple{Float64, Float64}}:
+ (0.0, 0.0)
+ (0.5, 0.2886751345948129)
+ (1.0, 0.0)
+ (1.5, 0.2886751345948129)
+ (0.5, 0.8660254037844386)
+ (1.0, 1.1547005383792515)
+ (1.5, 0.8660254037844386)
+ (2.0, 1.1547005383792515)
+ (1.0, 1.7320508075688772)
+ (1.5, 2.0207259421636903)
+ (2.0, 1.7320508075688772)
+ (2.5, 2.0207259421636903)
+julia> make_grid(sites)
+LatticeQSL.MaskedGrid{Float64}([0.0, 0.5, 1.0, 1.5, 2.0, 2.5], [0.0, 0.2886751345948129, 0.8660254037844386, 1.1547005383792515, 1.7320508075688772, 2.0207259421636903], Bool[1 0 0 0 0 0; 0 1 1 0 0 0; 1 0 0 1 1 0; 0 1 1 0 0 1; 0 0 0 1 1 0; 0 0 0 0 0 1])
+``` 
+
+It will generate grid like:
+1  0  0  0  0  0
+0  1  1  0  0  0
+1  0  0  1  1  0
+0  1  1  0  0  1
+0  0  0  1  1  0
+0  0  0  0  0  1
+"""
+function make_grid(sites::Vector{Tuple{T, T}}; atol = 10 * eps(T)) where {T}
+    # sites = padydim(sites)
+    xs = sort!(approximate_unique(getindex.(sites, 1), atol))
+    ys = sort!(approximate_unique(getindex.(sites, 2), atol))
+    ixs = map(s -> findfirst(==(s[1]), xs), sites)
+    iys = map(s -> findfirst(==(s[2]), ys), sites)
+    m, n = length(xs), length(ys)
+    mask = zeros(Bool, m, n)
+    for (ix, iy) in zip(ixs, iys)
+        mask[ix, iy] = true
+    end
+    return MaskedGrid(xs, ys, mask)
+end
+
+# return `(uxs, ixs)``, where `uxs` is the unique x-coordinates, `ixs` the mapping from the index in `xs` to the index in `uxs`.
+function approximate_unique(xs::AbstractVector{T}, atol) where {T}
+    uxs = T[]
+    for x in xs
+        found = false
+        for ux in uxs
+            if isapprox(x, ux; atol = atol)
+                found = true
+                break
+            end
+        end
+        if !found
+            push!(uxs, x)
+        end
+    end
+    return uxs
 end
