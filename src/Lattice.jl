@@ -20,7 +20,7 @@ e.g. [`ChainLattice`](@ref) is a 1D lattice, hence returns 1.
 """
 dimension(::AbstractLattice{D}) where {D} = D
 
-function _generate_sites(lattice_vectors, lattice_sites, repeats::Vararg{Int,D}; scale = 1.0) where {D}
+function _generate_sites(lattice_vectors, lattice_sites, repeats::Vararg{Int,D}; scale = 1.0, verbose::Bool=false) where {D}
     @assert length(lattice_vectors) == D
     @assert D > 0 && length(lattice_sites) > 0
     @assert all(>=(0), repeats)
@@ -31,7 +31,7 @@ function _generate_sites(lattice_vectors, lattice_sites, repeats::Vararg{Int,D};
     for ci in CartesianIndices(repeats)
         baseloc = mapreduce(i -> (ci.I[i] - 1) .* lattice_vectors[i], (x, y) -> x .+ y, 1:D)
         for siteloc in lattice_sites
-            @show baseloc, siteloc
+            verbose && @show baseloc, siteloc
             push!(locations, (baseloc .+ siteloc) .* scale)
         end
     end
@@ -75,14 +75,127 @@ _datatype(x::Tuple) = promote_type(_datatype.(x)...)
 _datatype(x::Number) = typeof(x)
 Lattice(vectors, sites) = Lattice((Tuple.(vectors)...,), (Tuple.(sites)...,))
 
+############ manipulate grid ###############
+"""
+    MaskedGrid{T}
+    MaskedGrid(xs, ys, mask)
+
+Masked square lattice contains 3 fields, the x-coordinates, y-coordinates and a mask, returning true if the site exists, false otherwise. To index the given lattice in the square grid.
+e.g. `MaskedGrid([0.0, 1.0, 3.0], [0.0, 2.0,6.0], Bool[1 0 0; 0 1 1; 0 1 0])` specifies the following lattice:
+
+         y₁   y₂        y₃
+         ↓    ↓         ↓
+    x₁ → ●    ⋅         ●
+    x₂ → ⋅    ●         ●
+
+    x₃ → ⋅    ●         ⋅
+"""
+struct MaskedGrid{T}
+    xs::Vector{T}
+    ys::Vector{T}
+    mask::Matrix{Bool}
+end
+
+
+"""
+    make_grid(sites; atol=...)
+
+Create a [`MaskedGrid`](@ref) from the sites. It is required by lattice preparation of Rydberg array.
+Because the grid will sort the sites by rows, we need `atol` (default value is 10 time sit data precision)
+determines up to what level of round off error, two atoms belong to the same row.
+
+```jldoctest
+julia> sites = HoneycombLattice() |> generate_sites(_, 2, 3)
+12-element Vector{Tuple{Float64, Float64}}:
+ (0.0, 0.0)
+ (0.5, 0.2886751345948129)
+ (1.0, 0.0)
+ (1.5, 0.2886751345948129)
+ (0.5, 0.8660254037844386)
+ (1.0, 1.1547005383792515)
+ (1.5, 0.8660254037844386)
+ (2.0, 1.1547005383792515)
+ (1.0, 1.7320508075688772)
+ (1.5, 2.0207259421636903)
+ (2.0, 1.7320508075688772)
+ (2.5, 2.0207259421636903)
+julia> make_grid(sites)
+LatticeQSL.MaskedGrid{Float64}([0.0, 0.5, 1.0, 1.5, 2.0, 2.5], [0.0, 0.2886751345948129, 0.8660254037844386, 1.1547005383792515, 1.7320508075688772, 2.0207259421636903], Bool[1 0 0 0 0 0; 0 1 1 0 0 0; 1 0 0 1 1 0; 0 1 1 0 0 1; 0 0 0 1 1 0; 0 0 0 0 0 1])
+``` 
+
+It will generate grid like:
+1  0  0  0  0  0
+0  1  1  0  0  0
+1  0  0  1  1  0
+0  1  1  0  0  1
+0  0  0  1  1  0
+0  0  0  0  0  1
+"""
+function make_grid(sites::Vector{Tuple{T, T}}; atol = 10 * eps(T)) where {T}
+    # sites = padydim(sites)
+    xs = sort!(approximate_unique(getindex.(sites, 1), atol))
+    ys = sort!(approximate_unique(getindex.(sites, 2), atol))
+    ixs = map(s -> findfirst(==(s[1]), xs), sites)
+    iys = map(s -> findfirst(==(s[2]), ys), sites)
+    m, n = length(xs), length(ys)
+    mask = zeros(Bool, m, n)
+    for (ix, iy) in zip(ixs, iys)
+        mask[ix, iy] = true
+    end
+    return MaskedGrid(xs, ys, mask)
+end
+make_grid(sites::Vector{Tuple{T}}; atol = 10 * eps(T)) where {T} = make_grid(map(s -> (s[1], zero(T)), sites); atol = atol)
+
+# return `(uxs, ixs)``, where `uxs` is the unique x-coordinates, `ixs` the mapping from the index in `xs` to the index in `uxs`.
+function approximate_unique(xs::AbstractVector{T}, atol) where {T}
+    uxs = T[]
+    for x in xs
+        found = false
+        for ux in uxs
+            if isapprox(x, ux; atol = atol)
+                found = true
+                break
+            end
+        end
+        if !found
+            push!(uxs, x)
+        end
+    end
+    return uxs
+end
+
+function collect_index(mg::MaskedGrid)
+    return map(ci -> (mg.xs[ci.I[1]], mg.ys[ci.I[2]]), findall(mg.mask))
+end
+
+function grid_index(lt::Vector{NTuple{D, T}}) where {D, T}
+    index = Dict{NTuple{D,T}, Int}()
+    mask_grid_index = collect_index(make_grid(lt))
+    for (i, site) in enumerate(mask_grid_index)
+        index[site] = i
+    end
+    return index
+end
+
+"""
+    generate_sites(lattice::AbstractLattice{D}, repeats::Vararg{Int,D}; scale=1.0)
+
+Returns an array of tuples (lattice coordinates) by tiling the specified `lattice`.
+The tiling repeat the `sites` of the lattice `m` times along the first dimension,
+`n` times along the second dimension, and so on. `scale` is a real number that re-scales the lattice constant and atom locations.
+"""
+function generate_sites(lattice::AbstractLattice{D}, repeats::Vararg{Int,D}; scale = 1.0) where {D}
+    return _generate_sites((lattice_vectors(lattice)...,), (lattice_sites(lattice)...,), repeats...; scale = scale)
+end
+
 """
     lattice_vectors(lattice::AbstractLattice)
-    reciprocal_lattice_vector(lattice::AbstractLattice)
+    reciprocal_lattice_vectors(lattice::AbstractLattice)
 
 Returns Bravais lattice vectors as a D-Tuple of D-Tuple, where D is the space dimension, and its reciprocal lattice vectors.
 """
 lattice_vectors(lattice::Lattice) = lattice.vectors
-reciprocal_lattice_vector(lattice::Lattice) = lattice.reciprocal_vectors
+reciprocal_lattice_vectors(lattice::Lattice) = lattice.reciprocal_vectors
 
 """
     lattice_sites(lattice::AbstractLattice)
@@ -138,7 +251,7 @@ struct HoneycombLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::HoneycombLattice)
-    reciprocal_lattice_vector(::HoneycombLattice)
+    reciprocal_lattice_vectors(::HoneycombLattice)
 
 Returns the Bravais lattice vectors for a Honeycomb lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors, satisfying 𝐚ᵢ · bⱼ = 2πδᵢⱼ.
@@ -150,7 +263,7 @@ The vectors are defined as:
 - b₂ = (0.0, 4π/√3)
 """
 lattice_vectors(::HoneycombLattice) = ((1.0, 0.0), (0.5, 0.5 * sqrt(3)))
-reciprocal_lattice_vector(::HoneycombLattice) = ((2π, -2π/sqrt(3)), (0.0, 4π/sqrt(3)))
+reciprocal_lattice_vectors(::HoneycombLattice) = ((2π, -2π/sqrt(3)), (0.0, 4π/sqrt(3)))
 
 """
     lattice_sites(::HoneycombLattice)
@@ -209,7 +322,7 @@ struct SquareLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::SquareLattice)
-    reciprocal_lattice_vector(::SquareLattice)
+    reciprocal_lattice_vectors(::SquareLattice)
 
 Returns the Bravais lattice vectors for a Square lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors.
@@ -221,7 +334,7 @@ The vectors are defined as:
 - b₂ = (0.0, 2π)
 """
 lattice_vectors(::SquareLattice) = ((1.0, 0.0), (0.0, 1.0))
-reciprocal_lattice_vector(::SquareLattice) = ((2π, 0.0), (0.0, 2π))
+reciprocal_lattice_vectors(::SquareLattice) = ((2π, 0.0), (0.0, 2π))
 
 """
     lattice_sites(::SquareLattice)
@@ -320,7 +433,7 @@ struct ChainLattice <: AbstractLattice{1} end
 
 """
     lattice_vectors(::ChainLattice)
-    reciprocal_lattice_vector(::ChainLattice)
+    reciprocal_lattice_vectors(::ChainLattice)
 
 Returns the Bravais lattice vectors for a Chain lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors.
@@ -330,7 +443,7 @@ The vectors are defined as:
 - b₁ = (2π,)
 """
 lattice_vectors(::ChainLattice) = ((1.0,),)
-reciprocal_lattice_vector(::ChainLattice) = ((2π,),)
+reciprocal_lattice_vectors(::ChainLattice) = ((2π,),)
 
 """
     lattice_sites(::ChainLattice)
@@ -390,7 +503,7 @@ struct LiebLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::LiebLattice)
-    reciprocal_lattice_vector(::LiebLattice)
+    reciprocal_lattice_vectors(::LiebLattice)
 
 Returns the Bravais lattice vectors for a Lieb lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors.
@@ -402,7 +515,7 @@ The vectors are defined as:
 - b₂ = (0.0, 2π)
 """
 lattice_vectors(::LiebLattice) = ((1.0, 0.0), (0.0, 1.0))
-reciprocal_lattice_vector(::LiebLattice) = ((2π, 0.0), (0.0, 2π))
+reciprocal_lattice_vectors(::LiebLattice) = ((2π, 0.0), (0.0, 2π))
 
 """
     lattice_sites(::LiebLattice)
@@ -464,7 +577,7 @@ struct KagomeLattice <: AbstractLattice{2} end
 
 """
     lattice_vectors(::KagomeLattice)
-    reciprocal_lattice_vector(::KagomeLattice)
+    reciprocal_lattice_vectors(::KagomeLattice)
 
 Returns the Bravais lattice vectors for a Kagome lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors.
@@ -476,7 +589,7 @@ The vectors are defined as:
 - b₂ = (0.0, 4π/√3)
 """
 lattice_vectors(::KagomeLattice) = ((1.0, 0.0), (0.5, 0.5 * sqrt(3)))
-reciprocal_lattice_vector(::KagomeLattice) = ((2π, -2π/√3), (0.0, 4π/√3))
+reciprocal_lattice_vectors(::KagomeLattice) = ((2π, -2π/√3), (0.0, 4π/√3))
 
 """
     lattice_sites(::KagomeLattice)
@@ -528,7 +641,7 @@ end
 
 """
     lattice_vectors(r::RectangularLattice)
-    reciprocal_lattice_vector(r::RectangularLattice)
+    reciprocal_lattice_vectors(r::RectangularLattice)
 
 Returns the Bravais lattice vectors for a Rectangular lattice as a Tuple of Tuples containing
 floats, and its reciprocal lattice vectors.
@@ -540,7 +653,7 @@ The vectors are defined as:
 - b₂ = (0.0, 2π/`r.aspect_ratio`)
 """
 lattice_vectors(r::RectangularLattice) = ((1.0, 0.0), (0.0, r.aspect_ratio))
-reciprocal_lattice_vector(r::RectangularLattice) = ((2π, 0.0), (0.0, 2π / r.aspect_ratio))
+reciprocal_lattice_vectors(r::RectangularLattice) = ((2π, 0.0), (0.0, 2π / r.aspect_ratio))
 
 """
     lattice_sites(::RectangularLattice)
@@ -557,16 +670,6 @@ its reciprocal lattice sites are defined as:
 lattice_sites(::RectangularLattice) = ((0.0, 0.0),)
 reciprocal_lattice_sites(::RectangularLattice) = ((0.0, 0.0),)
 
-"""
-    generate_sites(lattice::AbstractLattice{D}, repeats::Vararg{Int,D}; scale=1.0)
-
-Returns an array of tuples (lattice coordinates) by tiling the specified `lattice`.
-The tiling repeat the `sites` of the lattice `m` times along the first dimension,
-`n` times along the second dimension, and so on. `scale` is a real number that re-scales the lattice constant and atom locations.
-"""
-function generate_sites(lattice::AbstractLattice{D}, repeats::Vararg{Int,D}; scale = 1.0) where {D}
-    return _generate_sites((lattice_vectors(lattice)...,), (lattice_sites(lattice)...,), repeats...; scale = scale)
-end
 
 ############ manipulate sites ###############
 """
@@ -656,92 +759,4 @@ julia> LatticeQSL.clip_axes(sites, (-5.0, 5.0), (-5.0, 5.0))
 function clip_axes(sites, bound0::Tuple{T,T}, bounds::Vararg{Tuple{T,T},D}) where {D,T}
     @assert all(x -> length(x) == D + 1, sites) "expected $(D + 1)-tuple sites, got $(length.(sites))"
     return filter(x -> bound0[1] <= x[1] <= bound0[2] && all(i -> bounds[i][1] <= x[i+1] <= bounds[i][2], 1:D), sites)
-end
-
-############ manipulate grid ###############
-"""
-    MaskedGrid{T}
-    MaskedGrid(xs, ys, mask)
-
-Masked square lattice contains 3 fields, the x-coordinates, y-coordinates and a mask, returning true if the site exists, false otherwise. To index the given lattice in the square grid.
-e.g. `MaskedGrid([0.0, 1.0, 3.0], [0.0, 2.0,6.0], Bool[1 0 0; 0 1 1; 0 1 0])` specifies the following lattice:
-
-         y₁   y₂        y₃
-         ↓    ↓         ↓
-    x₁ → ●    ⋅         ●
-    x₂ → ⋅    ●         ●
-
-    x₃ → ⋅    ●         ⋅
-"""
-struct MaskedGrid{T}
-    xs::Vector{T}
-    ys::Vector{T}
-    mask::Matrix{Bool}
-end
-
-
-"""
-    make_grid(sites; atol=...)
-
-Create a [`MaskedGrid`](@ref) from the sites. It is required by lattice preparation of Rydberg array.
-Because the grid will sort the sites by rows, we need `atol` (default value is 10 time sit data precision)
-determines up to what level of round off error, two atoms belong to the same row.
-
-```jldoctest
-julia> sites = HoneycombLattice() |> generate_sites(_, 2, 3)
-12-element Vector{Tuple{Float64, Float64}}:
- (0.0, 0.0)
- (0.5, 0.2886751345948129)
- (1.0, 0.0)
- (1.5, 0.2886751345948129)
- (0.5, 0.8660254037844386)
- (1.0, 1.1547005383792515)
- (1.5, 0.8660254037844386)
- (2.0, 1.1547005383792515)
- (1.0, 1.7320508075688772)
- (1.5, 2.0207259421636903)
- (2.0, 1.7320508075688772)
- (2.5, 2.0207259421636903)
-julia> make_grid(sites)
-LatticeQSL.MaskedGrid{Float64}([0.0, 0.5, 1.0, 1.5, 2.0, 2.5], [0.0, 0.2886751345948129, 0.8660254037844386, 1.1547005383792515, 1.7320508075688772, 2.0207259421636903], Bool[1 0 0 0 0 0; 0 1 1 0 0 0; 1 0 0 1 1 0; 0 1 1 0 0 1; 0 0 0 1 1 0; 0 0 0 0 0 1])
-``` 
-
-It will generate grid like:
-1  0  0  0  0  0
-0  1  1  0  0  0
-1  0  0  1  1  0
-0  1  1  0  0  1
-0  0  0  1  1  0
-0  0  0  0  0  1
-"""
-function make_grid(sites::Vector{Tuple{T, T}}; atol = 10 * eps(T)) where {T}
-    # sites = padydim(sites)
-    xs = sort!(approximate_unique(getindex.(sites, 1), atol))
-    ys = sort!(approximate_unique(getindex.(sites, 2), atol))
-    ixs = map(s -> findfirst(==(s[1]), xs), sites)
-    iys = map(s -> findfirst(==(s[2]), ys), sites)
-    m, n = length(xs), length(ys)
-    mask = zeros(Bool, m, n)
-    for (ix, iy) in zip(ixs, iys)
-        mask[ix, iy] = true
-    end
-    return MaskedGrid(xs, ys, mask)
-end
-
-# return `(uxs, ixs)``, where `uxs` is the unique x-coordinates, `ixs` the mapping from the index in `xs` to the index in `uxs`.
-function approximate_unique(xs::AbstractVector{T}, atol) where {T}
-    uxs = T[]
-    for x in xs
-        found = false
-        for ux in uxs
-            if isapprox(x, ux; atol = atol)
-                found = true
-                break
-            end
-        end
-        if !found
-            push!(uxs, x)
-        end
-    end
-    return uxs
 end

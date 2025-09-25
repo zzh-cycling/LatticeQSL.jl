@@ -1,15 +1,6 @@
 using LatticeQSL
 using Test
 
-@testset "AtomList" begin
-    al = AtomList([(0.1, 0.2), (0.3, 0.4), (0.1, 0.8)])
-    @test al[2:3] == AtomList([(0.3, 0.4), (0.1, 0.8)])
-    @test al[[true, false, true]] == AtomList([(0.1, 0.2), (0.1, 0.8)])
-    @test length(al) == 3
-    @test size(al) == (3,)
-    @test al[3] == (0.1, 0.8)
-end
-
 @testset "lattices" begin
     for LT in [
         HoneycombLattice(),
@@ -17,14 +8,14 @@ end
         TriangularLattice(),
         LiebLattice(),
         KagomeLattice(),
-        GeneralLattice(((1.0, 0.0), (0.0, 1.0)), [(0.0, 0.0)]),
+        Lattice(((1.0, 0.0), (0.0, 1.0)), [(0.0, 0.0)]),
     ]
         @test LatticeQSL.dimension(LT) == 2
         @test generate_sites(LT, 5, 5) |> length == length(lattice_sites(LT)) * 25
     end
     lt1 = generate_sites(ChainLattice(), 5)
     @test lt1 |> length == length(lattice_sites(ChainLattice())) * 5
-    @test make_grid(lt1) isa MaskedGrid
+    @test make_grid(lt1) isa LatticeQSL.MaskedGrid
     l1 = generate_sites(HoneycombLattice(), 5, 5)
     l2 = l1 |> offset_axes(-1.0, -2.0)
     l3 = l2 |> clip_axes((0.0, 3.0), (0.0, 4.0))
@@ -46,28 +37,15 @@ end
     @test lattice_sites(rectangular_lattice) == ((0.0, 0.0),)
     @test lattice_vectors(rectangular_lattice)[2][2] == rectangular_lattice.aspect_ratio
 
-    # Lattice Dimensions
-
-    # rescale axes
-    sites = AtomList([(0.2, 0.3), (0.4, 0.8)])
-    @test (sites |> rescale_axes(2.0)) == [(0.4, 0.6), (0.8, 1.6)]
-
-    # delete atom positions
-    sites = generate_sites(SquareLattice(), 5, 5, scale=3)
-    deleteat!(sites, 1)
-    @test length(sites) == 24
-    deleteat!(sites, 12, 10, 11)
-    @test length(sites) == 21
-    deleteat!(sites, 1, 20)
-    @test length(sites) == 19
-
 end
 
 @testset "fix site ordering" begin
     lt = generate_sites(KagomeLattice(), 5, 5)
     grd = make_grid(lt[2:end-1])
-    x, y = collect_atoms(grd)[1]
+    x, y = LatticeQSL.collect_atoms(grd)[1]
     @test issorted(grd.xs)
     @test issorted(grd.ys)
     @test x ≈ 1.0 && y ≈ 0.0
+
+    idx = grid_index(lt)
 end
